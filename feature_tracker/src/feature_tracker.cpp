@@ -83,13 +83,9 @@ void FeatureTracker::readImage(const cv::Mat &img)
 
     if (forw_img.empty())
     {
-        prev_img = cur_img = forw_img = img;
+        cur_img = img;
     }
-    else
-    {
-        forw_img = img;
-    }
-
+    forw_img = img;
     forw_pts.clear();
 
     if (cur_pts.size() > 0)
@@ -144,7 +140,6 @@ void FeatureTracker::readImage(const cv::Mat &img)
         addPoints();
         ROS_DEBUG("selectFeature costs: %fms", t_a.toc());
 
-        prev_img = forw_img;
         prev_pts = forw_pts;
     }
     cur_img = forw_img;
