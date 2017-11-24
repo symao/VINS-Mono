@@ -21,6 +21,7 @@ double first_image_time;
 int pub_count = 1;
 bool first_image_flag = true;
 
+
 void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
     if(first_image_flag)
@@ -49,7 +50,20 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
         ROS_DEBUG("processing camera %d", i);
-
+    #if USE_CV_CUDA
+        cv::cuda::GpuMat dimg(ptr->image.rowRange(ROW * i, ROW * (i + 1)));
+        if (EQUALIZE)
+        {
+            static cv::Ptr<cv::cuda::CLAHE> clahe = cv::cuda::createCLAHE(3.0, cv::Size(8, 8));
+            TicToc t_c;
+            clahe->apply(dimg, dimg);
+            ROS_DEBUG("CLAHE costs: %fms", t_c.toc());
+        }
+        if (i != 1 || !STEREO_TRACK)
+            trackerData[i].readImage(dimg);
+        else
+            dimg.copyTo(trackerData[i].d_cur_img);
+    #else
         cv::Mat timg(ptr->image.rowRange(ROW * i, ROW * (i + 1)));
         if (EQUALIZE)
         {
@@ -58,12 +72,11 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
             clahe->apply(timg, timg);
             ROS_DEBUG("CLAHE costs: %fms", t_c.toc());
         }
-
         if (i != 1 || !STEREO_TRACK)
             trackerData[i].readImage(timg);
         else
             trackerData[i].cur_img = timg;
-
+    #endif
 #if SHOW_UNDISTORTION
         trackerData[i].showUndistortion("undistrotion_" + std::to_string(i));
 #endif
@@ -75,7 +88,15 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
         r_status.clear();
         r_err.clear();
         TicToc t_o;
+#if USE_CV_CUDA
+        cv::cuda::GpuMat d_status;
+        g_lk_tracker->calc(trackerData[0].d_cur_img, trackerData[1].d_cur_img,
+                            trackerData[0].d_cur_pts, trackerData[1].d_cur_pts, d_status);
+        download(d_status, r_status);
+        download(trackerData[1].d_cur_pts, trackerData[1].cur_pts);
+#else
         cv::calcOpticalFlowPyrLK(trackerData[0].cur_img, trackerData[1].cur_img, trackerData[0].cur_pts, trackerData[1].cur_pts, r_status, r_err, cv::Size(21, 21), 3);
+#endif
         ROS_DEBUG("spatial optical flow costs: %fms", t_o.toc());
         vector<cv::Point2f> ll, rr;
         vector<int> idx;
@@ -257,8 +278,26 @@ int main(int argc, char **argv)
         }
     }
 
-    ros::Subscriber sub_img = n.subscribe(IMAGE_TOPIC, 100, img_callback);
+#if USE_CV_CUDA
+    initCudaHandler();
+#endif
 
+#if 1
+    ros::Subscriber sub_img = n.subscribe(IMAGE_TOPIC, 100, img_callback);
+#else
+    std::string sourceUri = "/home/symao/data/euroc04.avi";
+    cv::VideoCapture cap(sourceUri);
+    if(!cap.isOpened())
+    {
+        printf("[ERROR] read source video failed. file '%s' not exists.\n", sourceUri.c_str());
+        return 0;
+    }
+    cv::Mat image;
+    while(cap.read(image))
+    {
+        img_callback();
+    }
+#endif
     pub_img = n.advertise<sensor_msgs::PointCloud>("feature", 1000);
     pub_match = n.advertise<sensor_msgs::Image>("feature_img",1000);
     /*

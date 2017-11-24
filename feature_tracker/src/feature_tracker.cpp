@@ -2,6 +2,31 @@
 
 int FeatureTracker::n_id = 0;
 
+#if USE_CV_CUDA
+cv::Ptr<cv::cuda::CornersDetector> g_corner_detector;
+cv::Ptr<cv::cuda::SparsePyrLKOpticalFlow> g_lk_tracker;
+
+void initCudaHandler()
+{
+    g_corner_detector = cv::cuda::createGoodFeaturesToTrackDetector(CV_8UC1, MAX_CNT, 0.1, MIN_DIST);
+    g_lk_tracker = cv::cuda::SparsePyrLKOpticalFlow::create(cv::Size(21, 21), 3);
+}
+
+void download(const cv::cuda::GpuMat& d_mat, std::vector<cv::Point2f>& vec)
+{
+    vec.resize(d_mat.cols);
+    cv::Mat mat(1, d_mat.cols, CV_32FC2, (void*)&vec[0]);
+    d_mat.download(mat);
+}
+
+void download(const cv::cuda::GpuMat& d_mat, std::vector<uchar>& vec)
+{
+    vec.resize(d_mat.cols);
+    cv::Mat mat(1, d_mat.cols, CV_8UC1, (void*)&vec[0]);
+    d_mat.download(mat);
+}
+#endif
+
 bool inBorder(const cv::Point2f &pt)
 {
     const int BORDER_SIZE = 1;
@@ -30,16 +55,16 @@ void reduceVector(vector<int> &v, vector<uchar> status)
 
 FeatureTracker::FeatureTracker()
 {
+
 }
 
 void FeatureTracker::setMask()
 {
+#if 1
     if(FISHEYE)
         mask = fisheye_mask.clone();
     else
         mask = cv::Mat(ROW, COL, CV_8UC1, cv::Scalar(255));
-    
-
     // prefer to keep features that are tracked for long time
     vector<pair<int, pair<cv::Point2f, int>>> cnt_pts_id;
 
@@ -50,7 +75,6 @@ void FeatureTracker::setMask()
          {
             return a.first > b.first;
          });
-
     forw_pts.clear();
     ids.clear();
     track_cnt.clear();
@@ -65,11 +89,44 @@ void FeatureTracker::setMask()
             cv::circle(mask, it.second.first, MIN_DIST, 0, -1);
         }
     }
+#else //acceleration
+    std::vector<uchar> status(track_cnt.size(), 1);
+    int new_cols = COL/MIN_DIST + 1;
+    int new_rows = ROW/MIN_DIST + 1;
+    std::vector<int> track_cnt_vec(new_rows*new_cols, -1);
+    for(size_t i = 0; i < forw_pts.size(); i++)
+    {
+        const auto& p = forw_pts[i];
+        int idx = int(p.x/MIN_DIST) + int(p.y/MIN_DIST)*new_cols;
+        if(track_cnt_vec[idx] < 0)
+        {
+            track_cnt_vec[idx] = i;
+        }
+        else if(track_cnt[track_cnt_vec[idx]]<track_cnt[i])
+        {
+            status[track_cnt_vec[idx]] = 0;
+            track_cnt_vec[idx] = i;
+        }
+        else
+        {
+            status[i] = 0;
+        }
+    }
+    reduceVector(forw_pts, status);
+    reduceVector(ids, status);
+    reduceVector(track_cnt, status);
+    if(FISHEYE)
+        mask = fisheye_mask.clone();
+    else
+        mask = cv::Mat(ROW, COL, CV_8UC1, cv::Scalar(255));
+    for (const auto& p : forw_pts)
+        cv::circle(mask, p, MIN_DIST, 0, -1);
+#endif
 }
 
 void FeatureTracker::addPoints()
 {
-    for (auto &p : n_pts)
+    for (auto &p : new_pts)
     {
         forw_pts.push_back(p);
         ids.push_back(-1);
@@ -77,15 +134,23 @@ void FeatureTracker::addPoints()
     }
 }
 
+#if USE_CV_CUDA
+void FeatureTracker::readImage(const cv::cuda::GpuMat &img)
+{
+    if (d_forw_img.empty())
+    {
+        img.copyTo(d_cur_img);
+    }
+    d_forw_img = img;
+#else
 void FeatureTracker::readImage(const cv::Mat &img)
 {
-    TicToc t_r;
-
     if (forw_img.empty())
     {
         cur_img = img;
     }
     forw_img = img;
+#endif
     forw_pts.clear();
 
     if (cur_pts.size() > 0)
@@ -93,8 +158,14 @@ void FeatureTracker::readImage(const cv::Mat &img)
         TicToc t_o;
         vector<uchar> status;
         vector<float> err;
+#if USE_CV_CUDA
+        cv::cuda::GpuMat d_status;
+        g_lk_tracker->calc(d_cur_img, d_forw_img, d_cur_pts, d_forw_pts, d_status);
+        download(d_status, status);
+        download(d_forw_pts, forw_pts);
+#else
         cv::calcOpticalFlowPyrLK(cur_img, forw_img, cur_pts, forw_pts, status, err, cv::Size(21, 21), 3);
-
+#endif
         for (int i = 0; i < int(forw_pts.size()); i++)
             if (status[i] && !inBorder(forw_pts[i]))
                 status[i] = 0;
@@ -127,12 +198,18 @@ void FeatureTracker::readImage(const cv::Mat &img)
                 cout << "mask is empty " << endl;
             if (mask.type() != CV_8UC1)
                 cout << "mask type wrong " << endl;
-            if (mask.size() != forw_img.size())
+            if (mask.size() != img.size())
                 cout << "wrong size " << endl;
-            cv::goodFeaturesToTrack(forw_img, n_pts, MAX_CNT - forw_pts.size(), 0.1, MIN_DIST, mask);
+#if USE_CV_CUDA
+            cv::cuda::GpuMat d_mask(mask);
+            g_corner_detector->detect(d_forw_img, d_forw_pts, d_mask);
+            download(d_forw_pts, new_pts);
+#else
+            cv::goodFeaturesToTrack(forw_img, new_pts, MAX_CNT - forw_pts.size(), 0.1, MIN_DIST, mask);
+#endif
         }
         else
-            n_pts.clear();
+            new_pts.clear();
         ROS_DEBUG("detect feature costs: %fms", t_t.toc());
 
         ROS_DEBUG("add feature begins");
@@ -142,8 +219,14 @@ void FeatureTracker::readImage(const cv::Mat &img)
 
         prev_pts = forw_pts;
     }
+#if USE_CV_CUDA
+    d_forw_img.copyTo(d_cur_img);
+    d_cur_pts = cv::cuda::GpuMat(forw_pts);
+    cur_pts = forw_pts;
+#else
     cur_img = forw_img;
     cur_pts = forw_pts;
+#endif
 }
 
 void FeatureTracker::rejectWithF()
@@ -200,6 +283,8 @@ void FeatureTracker::readIntrinsicParameter(const string &calib_file)
 
 void FeatureTracker::showUndistortion(const string &name)
 {
+#if USE_CV_CUDA
+#else
     cv::Mat undistortedImg(ROW + 600, COL + 600, CV_8UC1, cv::Scalar(0));
     vector<Eigen::Vector2d> distortedp, undistortedp;
     for (int i = 0; i < COL; i++)
@@ -232,6 +317,7 @@ void FeatureTracker::showUndistortion(const string &name)
     }
     cv::imshow(name, undistortedImg);
     cv::waitKey(0);
+#endif
 }
 
 vector<cv::Point2f> FeatureTracker::undistortedPoints()
