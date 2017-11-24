@@ -77,20 +77,9 @@ void FeatureTracker::addPoints()
     }
 }
 
-void FeatureTracker::readImage(const cv::Mat &_img)
+void FeatureTracker::readImage(const cv::Mat &img)
 {
-    cv::Mat img;
     TicToc t_r;
-
-    if (EQUALIZE)
-    {
-        cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
-        TicToc t_c;
-        clahe->apply(_img, img);
-        ROS_DEBUG("CLAHE costs: %fms", t_c.toc());
-    }
-    else
-        img = _img;
 
     if (forw_img.empty())
     {

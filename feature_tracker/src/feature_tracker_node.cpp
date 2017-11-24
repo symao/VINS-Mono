@@ -49,18 +49,20 @@ void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
         ROS_DEBUG("processing camera %d", i);
-        if (i != 1 || !STEREO_TRACK)
-            trackerData[i].readImage(ptr->image.rowRange(ROW * i, ROW * (i + 1)));
-        else
+
+        cv::Mat timg(ptr->image.rowRange(ROW * i, ROW * (i + 1)));
+        if (EQUALIZE)
         {
-            if (EQUALIZE)
-            {
-                cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE();
-                clahe->apply(ptr->image.rowRange(ROW * i, ROW * (i + 1)), trackerData[i].cur_img);
-            }
-            else
-                trackerData[i].cur_img = ptr->image.rowRange(ROW * i, ROW * (i + 1));
+            static cv::Ptr<cv::CLAHE> clahe = cv::createCLAHE(3.0, cv::Size(8, 8));
+            TicToc t_c;
+            clahe->apply(timg, timg);
+            ROS_DEBUG("CLAHE costs: %fms", t_c.toc());
         }
+
+        if (i != 1 || !STEREO_TRACK)
+            trackerData[i].readImage(timg);
+        else
+            trackerData[i].cur_img = timg;
 
 #if SHOW_UNDISTORTION
         trackerData[i].showUndistortion("undistrotion_" + std::to_string(i));
