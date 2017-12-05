@@ -1,32 +1,5 @@
+#define GLB_DEFINITION_CPP
 #include "parameters.h"
-
-double INIT_DEPTH;
-double MIN_PARALLAX;
-double ACC_N, ACC_W;
-double GYR_N, GYR_W;
-
-std::vector<Eigen::Matrix3d> RIC;
-std::vector<Eigen::Vector3d> TIC;
-
-Eigen::Vector3d G{0.0, 0.0, 9.8};
-
-double BIAS_ACC_THRESHOLD;
-double BIAS_GYR_THRESHOLD;
-double SOLVER_TIME;
-int NUM_ITERATIONS;
-int ESTIMATE_EXTRINSIC;
-std::string EX_CALIB_RESULT_PATH;
-std::string VINS_RESULT_PATH;
-int LOOP_CLOSURE = 0;
-int MIN_LOOP_NUM;
-std::string CAM_NAMES;
-std::string PATTERN_FILE;
-std::string VOC_FILE;
-std::string IMAGE_TOPIC;
-std::string IMU_TOPIC;
-int IMAGE_ROW, IMAGE_COL;
-std::string VINS_FOLDER_PATH;
-int MAX_KEYFRAME_NUM;
 
 template <typename T>
 T readParam(ros::NodeHandle &n, std::string name)
@@ -46,6 +19,13 @@ T readParam(ros::NodeHandle &n, std::string name)
 
 void readParameters(ros::NodeHandle &n)
 {
+    //show default value
+    FOCAL_LENGTH = 460.0;
+    LOOP_INFO_VALUE = 50.0;
+    STEREO_TRACK = false;
+    if (FREQ == 0)
+        FREQ = 100;
+
     std::string config_file;
     config_file = readParam<std::string>(n, "config_file");
     cv::FileStorage fsSettings(config_file, cv::FileStorage::READ);
@@ -60,6 +40,14 @@ void readParameters(ros::NodeHandle &n)
 
     IMAGE_COL = fsSettings["image_width"];
     IMAGE_ROW = fsSettings["image_height"];
+
+    MAX_CNT = fsSettings["max_cnt"];
+    MIN_DIST = fsSettings["min_dist"];
+    FREQ = fsSettings["freq"];
+    F_THRESHOLD = fsSettings["F_threshold"];
+    SHOW_TRACK = fsSettings["show_track"];
+    EQUALIZE = fsSettings["equalize"];
+    FISHEYE = fsSettings["fisheye"];
 
     SOLVER_TIME = fsSettings["max_solver_time"];
     NUM_ITERATIONS = fsSettings["max_num_iterations"];
@@ -114,8 +102,6 @@ void readParameters(ros::NodeHandle &n)
         
     } 
 
-
-
     LOOP_CLOSURE = fsSettings["loop_closure"];
     if (LOOP_CLOSURE == 1)
     {
@@ -124,14 +110,14 @@ void readParameters(ros::NodeHandle &n)
         VOC_FILE = VINS_FOLDER_PATH + VOC_FILE;
         PATTERN_FILE = VINS_FOLDER_PATH + PATTERN_FILE;
         MIN_LOOP_NUM = fsSettings["min_loop_num"];
-        CAM_NAMES = config_file;
     }
-
 
     INIT_DEPTH = 5.0;
     BIAS_ACC_THRESHOLD = 0.1;
     BIAS_GYR_THRESHOLD = 0.1;
     MAX_KEYFRAME_NUM = 1000;
+    PUB_THIS_FRAME = false;
+    CAM_NAMES.push_back(config_file);
     
     fsSettings.release();
 }

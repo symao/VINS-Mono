@@ -1,9 +1,9 @@
 %YAML:1.0
 
 #common parameters
-imu_topic: "/imu0"
-image_topic: "/cam0/image_raw"
-output_path: "/config/euroc/vins_result.csv"         # vins outputs will be wrttento vins_folder_path + output_path
+imu_topic: "/imu"
+image_topic: "/left/image_raw_color"
+output_path: "/config/mynteye/vins_result.csv"         # vins outputs will be wrttento vins_folder_path + output_path
 
 #camera calibration 
 model_type: PINHOLE
@@ -11,21 +11,21 @@ camera_name: camera
 image_width: 752
 image_height: 480
 distortion_parameters:
-   k1: -2.917e-01
-   k2: 8.228e-02
-   p1: 5.333e-05
-   p2: -1.578e-04
+   k1: 0
+   k2: 0
+   p1: 0.
+   p2: 0.
 projection_parameters:
-   fx: 4.616e+02
-   fy: 4.603e+02
-   cx: 3.630e+02
-   cy: 2.481e+02
+   fx: 431.3179390163068
+   fy: 431.3179390163068
+   cx: 404.4642372131348
+   cy: 264.6879405975342
 
 # Extrinsic parameter between IMU and Camera.
 estimate_extrinsic: 1   # 0  Have an accurate extrinsic parameters. We will trust the following imu^R_cam, imu^T_cam, don't change it.
                         # 1  Have an initial guess about extrinsic parameters. We will optimize around your initial guess.
                         # 2  Don't know anything about extrinsic parameters. You don't need to give R,T. We will try to calibrate it. Do some rotation movement at beginning. 
-ex_calib_result_path: "/config/euroc/ex_calib_result.yaml"  # If you choose 1 or 2, the extrinsic calibration result will be written vins_folder_path + ex_calib_result_path.                        
+ex_calib_result_path: "/config/mynteye/ex_calib_result.yaml"  # If you choose 1 or 2, the extrinsic calibration result will be written vins_folder_path + ex_calib_result_path.                        
 #If you choose 0 or 1, you should write down the following matrix.
 #Rotation from camera frame to imu frame, imu^R_cam
 extrinsicRotation: !!opencv-matrix
@@ -40,7 +40,7 @@ extrinsicTranslation: !!opencv-matrix
    rows: 3
    cols: 1
    dt: d
-   data: [-0.02,-0.06, 0.01]
+   data: [-0.00218296788001,-0.0441376819758, 0.0164]
 
 #feature traker paprameters
 max_cnt: 150            # max feature number in feature tracking

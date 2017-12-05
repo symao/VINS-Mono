@@ -8,8 +8,6 @@
 #include "initial/initial_sfm.h"
 #include "initial/initial_alignment.h"
 #include "initial/initial_ex_rotation.h"
-#include <std_msgs/Header.h>
-#include <std_msgs/Float32.h>
 
 #include <ceres/ceres.h>
 #include "factor/imu_factor.h"
@@ -48,7 +46,7 @@ class Estimator
 
     // interface
     void processIMU(double t, const Vector3d &linear_acceleration, const Vector3d &angular_velocity);
-    void processImage(const map<int, vector<pair<int, Vector3d>>> &image, const std_msgs::Header &header);
+    void processImage(const map<int, vector<pair<int, Vector3d>>> &image, double tstamp);
 
     // internal
     void clearState();
@@ -94,7 +92,7 @@ class Estimator
 
     Matrix3d back_R0, last_R, last_R0;
     Vector3d back_P0, last_P, last_P0;
-    std_msgs::Header Headers[(WINDOW_SIZE + 1)];
+    double frame_ts[(WINDOW_SIZE + 1)];
 
     IntegrationBase *pre_integrations[(WINDOW_SIZE + 1)];
     Vector3d acc_0, gyr_0;

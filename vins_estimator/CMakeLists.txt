@@ -31,10 +31,9 @@ include_directories(
 
 catkin_package()
 
-add_executable(vins_estimator
-    src/estimator_node.cpp
-    src/parameters.cpp
+set(VINS_SRC
     src/estimator.cpp
+    src/feature_tracker.cpp
     src/feature_manager.cpp
     src/factor/pose_local_parameterization.cpp
     src/factor/projection_factor.cpp
@@ -57,10 +56,7 @@ add_executable(vins_estimator
     src/loop-closure/ThirdParty/VocabularyBinary.cpp
     src/loop-closure/loop_closure.cpp
     src/loop-closure/keyframe.cpp
-    src/loop-closure/keyframe_database.cpp
-    )
+    src/loop-closure/keyframe_database.cpp)
 
-
-target_link_libraries(vins_estimator ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES}) 
-
-
+add_executable(vins_estimator src/vins_noros.cpp src/parameters.cpp ${VINS_SRC})
+target_link_libraries(vins_estimator ${catkin_LIBRARIES} ${OpenCV_LIBS} ${CERES_LIBRARIES})

@@ -14,12 +14,11 @@
 #include "camodocal/camera_models/PinholeCamera.h"
 
 #include "parameters.h"
-#include "tic_toc.h"
+#include "utility/tic_toc.h"
 
 using namespace std;
 using namespace camodocal;
 using namespace Eigen;
-
 
 bool inBorder(const cv::Point2f &pt);
 void reduceVector(vector<cv::Point2f> &v, vector<uchar> status);

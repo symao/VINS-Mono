@@ -105,24 +105,24 @@ void Estimator::processIMU(double dt, const Vector3d &linear_acceleration, const
     gyr_0 = angular_velocity;
 }
 
-void Estimator::processImage(const map<int, vector<pair<int, Vector3d>>> &image, const std_msgs::Header &header)
+void Estimator::processImage(const map<int, vector<pair<int, Vector3d>>> &image, double tstamp)
 {
-    ROS_DEBUG("new image coming ------------------------------------------");
+    ROS_DEBUG("new image coming");
     ROS_DEBUG("Adding feature points %lu", image.size());
     if (f_manager.addFeatureCheckParallax(frame_count, image))
         marginalization_flag = MARGIN_OLD;
     else
         marginalization_flag = MARGIN_SECOND_NEW;
 
-    ROS_DEBUG("this frame is--------------------%s", marginalization_flag ? "reject" : "accept");
+    ROS_DEBUG("this frame is %s", marginalization_flag ? "reject" : "accept");
     ROS_DEBUG("%s", marginalization_flag ? "Non-keyframe" : "Keyframe");
     ROS_DEBUG("Solving %d", frame_count);
     ROS_DEBUG("number of feature: %d", f_manager.getFeatureCount());
-    Headers[frame_count] = header;
+    frame_ts[frame_count] = tstamp;
 
-    ImageFrame imageframe(image, header.stamp.toSec());
+    ImageFrame imageframe(image, tstamp);
     imageframe.pre_integration = tmp_pre_integration;
-    all_image_frame.insert(make_pair(header.stamp.toSec(), imageframe));
+    all_image_frame.insert(make_pair(tstamp, imageframe));
     tmp_pre_integration = new IntegrationBase{acc_0, gyr_0, Bas[frame_count], Bgs[frame_count]};
 
     if(ESTIMATE_EXTRINSIC == 2)
@@ -148,10 +148,10 @@ void Estimator::processImage(const map<int, vector<pair<int, Vector3d>>> &image,
         if (frame_count == WINDOW_SIZE)
         {
             bool result = false;
-            if( ESTIMATE_EXTRINSIC != 2 && (header.stamp.toSec() - initial_timestamp) > 0.1)
+            if( ESTIMATE_EXTRINSIC != 2 && (tstamp - initial_timestamp) > 0.1)
             {
                result = initialStructure();
-               initial_timestamp = header.stamp.toSec();
+               initial_timestamp = tstamp;
             }
             if(result)
             {
@@ -164,7 +164,6 @@ void Estimator::processImage(const map<int, vector<pair<int, Vector3d>>> &image,
                 last_P = Ps[WINDOW_SIZE];
                 last_R0 = Rs[0];
                 last_P0 = Ps[0];
-                
             }
             else
                 slideWindow();
@@ -175,8 +174,12 @@ void Estimator::processImage(const map<int, vector<pair<int, Vector3d>>> &image,
     else
     {
         TicToc t_solve;
+        // for(int i = 0;i<WINDOW_SIZE;i++)
+        //     std::cout<<i<<":"<<Ps[i].transpose()<<"   "<<Quaterniond(Rs[i]).vec().transpose()<<std::endl;
         solveOdometry();
         ROS_DEBUG("solver costs: %fms", t_solve.toc());
+        // for(int i = 0;i<WINDOW_SIZE;i++)
+        //     std::cout<<i<<":"<<Ps[i].transpose()<<"   "<<Quaterniond(Rs[i]).vec().transpose()<<std::endl;
 
         if (failureDetection())
         {
@@ -279,7 +282,7 @@ bool Estimator::initialStructure()
     {
         // provide initial guess
         cv::Mat r, rvec, t, D, tmp_r;
-        if((frame_it->first) == Headers[i].stamp.toSec())
+        if((frame_it->first) == frame_ts[i])
         {
             frame_it->second.is_key_frame = true;
             frame_it->second.R = Q[i].toRotationMatrix() * RIC[0].transpose();
@@ -287,7 +290,7 @@ bool Estimator::initialStructure()
             i++;
             continue;
         }
-        if((frame_it->first) > Headers[i].stamp.toSec())
+        if((frame_it->first) > frame_ts[i])
         {
             i++;
         }
@@ -366,11 +369,11 @@ bool Estimator::visualInitialAlign()
     // change state
     for (int i = 0; i <= frame_count; i++)
     {
-        Matrix3d Ri = all_image_frame[Headers[i].stamp.toSec()].R;
-        Vector3d Pi = all_image_frame[Headers[i].stamp.toSec()].T;
+        Matrix3d Ri = all_image_frame[frame_ts[i]].R;
+        Vector3d Pi = all_image_frame[frame_ts[i]].T;
         Ps[i] = Pi;
         Rs[i] = Ri;
-        all_image_frame[Headers[i].stamp.toSec()].is_key_frame = true;
+        all_image_frame[frame_ts[i]].is_key_frame = true;
     }
 
     VectorXd dep = f_manager.getDepthVector();
@@ -630,7 +633,7 @@ bool Estimator::failureDetection()
     delta_angle = acos(delta_Q.w()) * 2.0 / 3.14 * 180.0;
     if (delta_angle > 50)
     {
-        ROS_INFO(" big delta_angle ");
+        ROS_INFO(" big delta_angle %.1f", delta_angle);
         return true;
     }
     return false;
@@ -717,7 +720,7 @@ void Estimator::optimization()
         {    
             for(int i = 0; i < WINDOW_SIZE; i++)
             {
-                if(retrive_data_vector[k].header == Headers[i].stamp.toSec())
+                if(retrive_data_vector[k].header == frame_ts[i])
                 {
                     relocalize = true;
                     ceres::LocalParameterization *local_parameterization = new PoseLocalParameterization();
@@ -789,7 +792,7 @@ void Estimator::optimization()
         {
             for(int i = 0; i< WINDOW_SIZE; i++)
             {
-                if(retrive_data_vector[k].header == Headers[i].stamp.toSec())
+                if(retrive_data_vector[k].header == frame_ts[i])
                 {
                     retrive_data_vector[k].relative_pose = true;
                     Matrix3d Rs_i = Quaterniond(para_Pose[i][6], para_Pose[i][3], para_Pose[i][4], para_Pose[i][5]).normalized().toRotationMatrix();
@@ -991,13 +994,13 @@ void Estimator::slideWindow()
                 linear_acceleration_buf[i].swap(linear_acceleration_buf[i + 1]);
                 angular_velocity_buf[i].swap(angular_velocity_buf[i + 1]);
 
-                Headers[i] = Headers[i + 1];
+                frame_ts[i] = frame_ts[i + 1];
                 Ps[i].swap(Ps[i + 1]);
                 Vs[i].swap(Vs[i + 1]);
                 Bas[i].swap(Bas[i + 1]);
                 Bgs[i].swap(Bgs[i + 1]);
             }
-            Headers[WINDOW_SIZE] = Headers[WINDOW_SIZE - 1];
+            frame_ts[WINDOW_SIZE] = frame_ts[WINDOW_SIZE - 1];
             Ps[WINDOW_SIZE] = Ps[WINDOW_SIZE - 1];
             Vs[WINDOW_SIZE] = Vs[WINDOW_SIZE - 1];
             Rs[WINDOW_SIZE] = Rs[WINDOW_SIZE - 1];
@@ -1013,7 +1016,7 @@ void Estimator::slideWindow()
 
             if (true || solver_flag == INITIAL)
             {
-                double t_0 = Headers[0].stamp.toSec();
+                double t_0 = frame_ts[0];
                 map<double, ImageFrame>::iterator it_0;
                 it_0 = all_image_frame.find(t_0);
                 delete it_0->second.pre_integration;
@@ -1040,7 +1043,7 @@ void Estimator::slideWindow()
                 angular_velocity_buf[frame_count - 1].push_back(tmp_angular_velocity);
             }
 
-            Headers[frame_count - 1] = Headers[frame_count];
+            frame_ts[frame_count - 1] = frame_ts[frame_count];
             Ps[frame_count - 1] = Ps[frame_count];
             Vs[frame_count - 1] = Vs[frame_count];
             Rs[frame_count - 1] = Rs[frame_count];

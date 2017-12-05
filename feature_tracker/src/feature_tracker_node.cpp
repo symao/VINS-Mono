@@ -21,7 +21,6 @@ double first_image_time;
 int pub_count = 1;
 bool first_image_flag = true;
 
-
 void img_callback(const sensor_msgs::ImageConstPtr &img_msg)
 {
     if(first_image_flag)

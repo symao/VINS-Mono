@@ -8,42 +8,63 @@
 #include <opencv2/core/eigen.hpp>
 #include <fstream>
 
-const double FOCAL_LENGTH = 460.0;
-const int WINDOW_SIZE = 10;
-const int NUM_OF_CAM = 1;
-const int NUM_OF_F = 1000;
-const double LOOP_INFO_VALUE = 50.0;
+#ifdef GLB_DEFINITION_CPP
+#define GLB_EXT
+#else
+#define GLB_EXT extern
+#endif
+
 //#define DEPTH_PRIOR
 //#define GT
 #define UNIT_SPHERE_ERROR
 
-extern double INIT_DEPTH;
-extern double MIN_PARALLAX;
-extern int ESTIMATE_EXTRINSIC;
+const int WINDOW_SIZE = 10;
+const int NUM_OF_CAM = 1;
+const int NUM_OF_F = 1000;
 
-extern double ACC_N, ACC_W;
-extern double GYR_N, GYR_W;
+GLB_EXT std::string FISHEYE_MASK;
+GLB_EXT int MAX_CNT;
+GLB_EXT int MIN_DIST;
+GLB_EXT int FREQ;
+GLB_EXT double F_THRESHOLD;
+GLB_EXT int SHOW_TRACK;
+GLB_EXT int STEREO_TRACK;
+GLB_EXT int EQUALIZE;
+GLB_EXT int FISHEYE;
+GLB_EXT bool PUB_THIS_FRAME;
 
-extern std::vector<Eigen::Matrix3d> RIC;
-extern std::vector<Eigen::Vector3d> TIC;
-extern Eigen::Vector3d G;
+GLB_EXT int IMAGE_ROW,IMAGE_COL;
 
-extern double BIAS_ACC_THRESHOLD;
-extern double BIAS_GYR_THRESHOLD;
-extern double SOLVER_TIME;
-extern int NUM_ITERATIONS;
-extern std::string EX_CALIB_RESULT_PATH;
-extern std::string VINS_RESULT_PATH;
-extern std::string VINS_FOLDER_PATH;
+GLB_EXT double FOCAL_LENGTH;
+GLB_EXT double LOOP_INFO_VALUE;
 
-extern int LOOP_CLOSURE;
-extern int MIN_LOOP_NUM;
-extern int MAX_KEYFRAME_NUM;
-extern std::string PATTERN_FILE;
-extern std::string VOC_FILE;
-extern std::string CAM_NAMES;
-extern std::string IMAGE_TOPIC;
-extern std::string IMU_TOPIC;
+GLB_EXT double INIT_DEPTH;
+GLB_EXT double MIN_PARALLAX;
+GLB_EXT int ESTIMATE_EXTRINSIC;
+
+GLB_EXT double ACC_N, ACC_W;
+GLB_EXT double GYR_N, GYR_W;
+
+GLB_EXT std::vector<Eigen::Matrix3d> RIC;
+GLB_EXT std::vector<Eigen::Vector3d> TIC;
+GLB_EXT Eigen::Vector3d G;
+
+GLB_EXT double BIAS_ACC_THRESHOLD;
+GLB_EXT double BIAS_GYR_THRESHOLD;
+GLB_EXT double SOLVER_TIME;
+GLB_EXT int NUM_ITERATIONS;
+GLB_EXT std::string EX_CALIB_RESULT_PATH;
+GLB_EXT std::string VINS_RESULT_PATH;
+GLB_EXT std::string VINS_FOLDER_PATH;
+
+GLB_EXT int LOOP_CLOSURE;
+GLB_EXT int MIN_LOOP_NUM;
+GLB_EXT int MAX_KEYFRAME_NUM;
+GLB_EXT std::string PATTERN_FILE;
+GLB_EXT std::string VOC_FILE;
+GLB_EXT std::vector<std::string> CAM_NAMES;
+GLB_EXT std::string IMAGE_TOPIC;
+GLB_EXT std::string IMU_TOPIC;
 
 void readParameters(ros::NodeHandle &n);
 

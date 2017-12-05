@@ -58,7 +58,7 @@ void printStatistics(const Estimator &estimator, double t)
 {
     if (estimator.solver_flag != Estimator::SolverFlag::NON_LINEAR)
         return;
-    ROS_INFO_STREAM("position: " << estimator.Ps[WINDOW_SIZE].transpose());
+    ROS_DEBUG_STREAM("position: " << estimator.Ps[WINDOW_SIZE].transpose());
     ROS_DEBUG_STREAM("orientation: " << estimator.Vs[WINDOW_SIZE].transpose());
     for (int i = 0; i < NUM_OF_CAM; i++)
     {
@@ -206,7 +206,7 @@ void pubCameraPose(const Estimator &estimator, const std_msgs::Header &header, E
         int i = idx2;
         geometry_msgs::PoseStamped camera_pose;
         camera_pose.header = header;
-        camera_pose.header.frame_id = std::to_string(estimator.Headers[i].stamp.toNSec());
+        camera_pose.header.frame_id = std::to_string(estimator.frame_ts[i]);
         Vector3d P = estimator.Ps[i] + estimator.Rs[i] * estimator.tic[0];
         Quaterniond R = Quaterniond(estimator.Rs[i] * estimator.ric[0]);
         P = (loop_correct_r * estimator.Ps[i] + loop_correct_t) + (loop_correct_r * estimator.Rs[i]) * estimator.tic[0];
