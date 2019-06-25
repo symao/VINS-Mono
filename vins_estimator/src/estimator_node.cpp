@@ -205,6 +205,35 @@ void relocalization_callback(const sensor_msgs::PointCloudConstPtr &points_msg)
     m_buf.unlock();
 }
 
+const int max_cnt = 10000;
+const int cols = 18;
+double *log_data = new double[max_cnt*cols];
+int cnt = 0;
+void mylog()
+{
+    FILE* fp = fopen("vio.txt","w");
+    int k = 0;
+    while(1)
+    {
+        if(k < cnt)
+        {
+            for(int i=0; i<cols; i++)
+            {
+                if(i > 0) fprintf(fp, " ");
+                fprintf(fp, "%f", log_data[cols * k + i]);
+            }
+            fprintf(fp, "\n");
+            fflush(fp);
+            k++;
+        }
+        else
+        {
+            usleep(10000);
+        }
+    }
+    fclose(fp);
+}
+
 // thread: visual-inertial odometry
 void process()
 {
@@ -326,6 +355,38 @@ void process()
             pubKeyframe(estimator);
             if (relo_msg != NULL)
                 pubRelocalization(estimator);
+        #if 1
+            if (estimator.solver_flag == Estimator::SolverFlag::NON_LINEAR
+                && cnt < max_cnt)
+            {
+                auto q = Eigen::Quaterniond(estimator.Rs[WINDOW_SIZE]);
+                auto p = estimator.Ps[WINDOW_SIZE];
+                auto v = estimator.Vs[WINDOW_SIZE];
+                auto ba = estimator.Bas[WINDOW_SIZE];
+                auto bg = estimator.Bgs[WINDOW_SIZE];
+
+                double *lp = log_data + cnt * cols;
+                lp[0] = header.stamp.toSec();
+                lp[1] = p(0);
+                lp[2] = p(1);
+                lp[3] = p(2);
+                lp[4] = q.w();
+                lp[5] = q.x();
+                lp[6] = q.y();
+                lp[7] = q.z();
+                lp[8] = v(0);
+                lp[9] = v(1);
+                lp[10] = v(2);
+                lp[11] = ba(0);
+                lp[12] = ba(1);
+                lp[13] = ba(2);
+                lp[14] = bg(0);
+                lp[15] = bg(1);
+                lp[16] = bg(2);
+                lp[17] = whole_t;
+                cnt++;
+            }
+        #endif
             //ROS_ERROR("end: %f, at %f", img_msg->header.stamp.toSec(), ros::Time::now().toSec());
         }
         m_estimator.unlock();
@@ -358,6 +419,7 @@ int main(int argc, char **argv)
     ros::Subscriber sub_relo_points = n.subscribe("/pose_graph/match_points", 2000, relocalization_callback);
 
     std::thread measurement_process{process};
+    std::thread log_process{mylog};
     ros::spin();
 
     return 0;
